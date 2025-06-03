@@ -1,0 +1,80 @@
+import React from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useAuth } from '../contexts/AuthContext'
+import permissionsService from '../services/permissionsService'
+import { ResourceType, ComponentType, Permissions } from '../types/permissions'
+import { DEFAULT_PERMISSIONS } from '../types/auth'
+
+type Permission = keyof typeof DEFAULT_PERMISSIONS.admin
+
+export const usePermissions = () => {
+  const { user } = useAuth()
+
+  const hasPermission = (permission: string): boolean => {
+    if (!user?.permissions) return false
+    return user.permissions[permission as keyof typeof user.permissions] || false
+  }
+
+  return { hasPermission }
+}
+
+// Higher-order component for permission-based rendering
+export const withPermission = <P extends object>(
+  WrappedComponent: React.ComponentType<P>,
+  permission: Permission
+) => {
+  return function WithPermissionWrapper(props: P & { [key: string]: any }) {
+    const { hasPermission } = usePermissions()
+    const allowed = hasPermission(permission)
+
+    if (!allowed) return null
+    return <WrappedComponent {...props} />
+  }
+}
+
+// Permission requirement component
+export const RequirePermission: React.FC<{
+  resource?: ResourceType
+  resourceAction?: string
+  component?: ComponentType
+  componentAction?: string
+  children: React.ReactNode
+  fallback?: React.ReactNode
+}> = ({
+  resource,
+  resourceAction,
+  component,
+  componentAction,
+  children,
+  fallback = null
+}) => {
+  const { checkResourcePermission, checkComponentPermission } = usePermissions()
+
+  const hasPermission = () => {
+    if (resource && resourceAction) {
+      return checkResourcePermission(resource, resourceAction)
+    }
+    if (component && componentAction) {
+      return checkComponentPermission(component, componentAction)
+    }
+    return false
+  }
+
+  return hasPermission() ? <>{children}</> : <>{fallback}</>
+}
+
+interface WithPermissionProps {
+  permission: Permission
+  fallback?: React.ReactNode
+}
+
+export const WithPermission: React.FC<WithPermissionProps & { children: React.ReactNode }> = ({
+  permission,
+  children,
+  fallback = null,
+}) => {
+  const { hasPermission } = usePermissions()
+  const allowed = hasPermission(permission)
+
+  return allowed ? <>{children}</> : <>{fallback}</>
+} 
